@@ -1,0 +1,22 @@
+{{- $fullName := include "patroni-postgres.fullname" . }}
+{{- $labels := include "patroni-postgres.labels" . | nindent 4 }}
+{{- $size := .Values.pvcSize }}
+{{- range $index, $class :=  .Values.pvcStorageClasses }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    application: patroni
+    cluster-name: {{ $fullName }}
+    {{ $labels }}
+  name: pgdata-{{ $fullName }}-{{ $index }}
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ $size }}
+  volumeMode: Filesystem
+  storageClassName: {{ $class }}
+{{- end }}

@@ -1,0 +1,35 @@
+# Default values for patroni-postgres.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# define storageClass for each pod. This will determine replica count. If you
+# want storage from the same storageClass, then define it as many times as many
+# replicas you want.
+
+pvcStorageClasses:
+  - default
+
+pvcSize: 1Gi
+
+image: ghcr.io/rkojedzinszky/postgres-patroni:13-2.1.1
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 96Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+podAntiAffinityTopologyKey: ""
+
+# set desired serviceName here. if unset, the release name will be used
+serviceName: ""
+
+# To deploy https://github.com/prometheus-community/postgres_exporter,
+# you'll have to create a secret containing DATA_SOURCE_NAME. Then, uncomment
+# the following setting, and the side-container pod will be attached.
+
+postgres_exporter:
+  secretName: ""

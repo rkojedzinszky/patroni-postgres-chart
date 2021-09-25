@@ -1,0 +1,43 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "patroni-postgres.fullname" . }}-default
+  labels:
+    {{- include "patroni-postgres.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      application: patroni
+      cluster-name: {{ include "patroni-postgres.fullname" . }}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          application: patroni
+          cluster-name: {{ include "patroni-postgres.fullname" . }}
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "patroni-postgres.fullname" . }}-in
+  labels:
+    {{- include "patroni-postgres.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      application: patroni
+      cluster-name: {{ include "patroni-postgres.fullname" . }}
+  policyTypes:
+  - Ingress
+  ingress:
+  - ports:
+    - port: 5432
+      protocol: TCP
+    {{- with .Values.postgres_exporter.secretName }}
+    - port: 9187
+      protocol: TCP
+    {{- end }}

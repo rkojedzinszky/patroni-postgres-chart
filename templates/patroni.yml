@@ -1,0 +1,142 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "patroni-postgres.fullname" . }}
+  labels:
+    {{- include "patroni-postgres.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "patroni-postgres.fullname" . }}
+  replicas: {{ len .Values.pvcStorageClasses }}
+  selector:
+    matchLabels:
+      application: patroni
+      cluster-name: {{ include "patroni-postgres.fullname" . }}
+      {{- include "patroni-postgres.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.postgres_exporter.secretName }}
+      annotations:
+        prometheus.io/port: "9187"
+        prometheus.io/scrape: "true"
+      {{- end }}
+      labels:
+        application: patroni
+        cluster-name: {{ include "patroni-postgres.fullname" . }}
+        {{- include "patroni-postgres.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "patroni-postgres.serviceAccountName" . }}
+      securityContext:
+        fsGroup: 15432
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 15432
+        runAsUser: 15432
+        runAsNonRoot: true
+      containers:
+        - name: postgres
+          image: "{{ .Values.image }}"
+          {{- with .Values.resources }}
+          resources:
+          {{ toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+          - containerPort: 8008
+            protocol: TCP
+          - containerPort: 5432
+            protocol: TCP
+          startupProbe:
+            failureThreshold: 20
+            httpGet:
+              path: /health
+              port: 8008
+              scheme: HTTP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8008
+              scheme: HTTP
+          readinessProbe:
+            httpGet:
+              path: /readiness
+              port: 8008
+              scheme: HTTP
+          env:
+          - name: PATRONI_KUBERNETES_POD_IP
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: status.podIP
+          - name: PATRONI_KUBERNETES_NAMESPACE
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.namespace
+          - name: PATRONI_KUBERNETES_LABELS
+            value: '{application: patroni, cluster-name: {{ include "patroni-postgres.fullname" . }}}'
+          - name: PATRONI_SUPERUSER_USERNAME
+            value: postgres
+          - name: PATRONI_SUPERUSER_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                key: superuser-password
+                name: {{ include "patroni-postgres.fullname" . }}
+          - name: PATRONI_REPLICATION_USERNAME
+            value: standby
+          - name: PATRONI_REPLICATION_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                key: replication-password
+                name: {{ include "patroni-postgres.fullname" . }}
+          - name: PATRONI_SCOPE
+            value: {{ include "patroni-postgres.fullname" . }}
+          - name: PATRONI_NAME
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.name
+          - name: PATRONI_POSTGRESQL_DATA_DIR
+            value: /var/lib/postgresql/data
+          - name: PATRONI_POSTGRESQL_PGPASS
+            value: /tmp/pgpass
+          - name: PATRONI_POSTGRESQL_LISTEN
+            value: 0.0.0.0:5432
+          - name: PATRONI_RESTAPI_LISTEN
+            value: 0.0.0.0:8008
+          volumeMounts:
+          - mountPath: /var/lib/postgresql
+            name: pgdata
+      {{- with .Values.postgres_exporter.secretName }}
+        - name: exporter
+          image: quay.io/prometheuscommunity/postgres-exporter
+          envFrom:
+          - secretRef:
+              name: {{ . }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.podAntiAffinityTopologyKey }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: {{ .Values.podAntiAffinityTopologyKey }}
+              labelSelector:
+                matchLabels:
+                  application: patroni
+                  cluster-name: {{ include "patroni-postgres.fullname" . }}
+                  {{- include "patroni-postgres.selectorLabels" . | nindent 18 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  volumeClaimTemplates:
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: pgdata
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources: {}
+      volumeMode: Filesystem
