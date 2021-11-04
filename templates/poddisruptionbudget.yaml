@@ -1,0 +1,13 @@
+{{ if .Values.poddisruptionbudget }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "patroni-postgres.fullname" . }}
+spec:
+  {{- toYaml .Values.poddisruptionbudget | nindent 2 }}
+  selector:
+    matchLabels:
+      application: patroni
+      cluster-name: {{ include "patroni-postgres.fullname" . }}
+      {{- include "patroni-postgres.selectorLabels" . | nindent 6 }}
+{{ end }}

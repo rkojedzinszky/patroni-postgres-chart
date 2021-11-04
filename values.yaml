@@ -27,6 +27,11 @@ podAntiAffinityTopologyKey: ""
 # set desired serviceName here. if unset, the release name will be used
 serviceName: ""
 
+# generate a PodDisruptionBudget according to parameters
+# https://kubernetes.io/docs/tasks/run-application/configure-pdb/
+#poddisruptionbudget:
+#  minAvailable: 1
+
 # To deploy https://github.com/prometheus-community/postgres_exporter,
 # you'll have to create a secret containing DATA_SOURCE_NAME. Then, uncomment
 # the following setting, and the side-container pod will be attached.
