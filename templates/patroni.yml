@@ -37,7 +37,7 @@ spec:
           imagePullPolicy: "{{ .Values.imagePullPolicy }}"
           {{- with .Values.resources }}
           resources:
-          {{ toYaml . | nindent 12 }}
+          {{- toYaml . | nindent 12 }}
           {{- end }}
           ports:
           - containerPort: 8008
@@ -105,12 +105,18 @@ spec:
           volumeMounts:
           - mountPath: /var/lib/postgresql
             name: pgdata
-      {{- with .Values.postgres_exporter.secretName }}
+      {{- with .Values.postgres_exporter }}
+        {{- if .secretName }}
         - name: exporter
           image: quay.io/prometheuscommunity/postgres-exporter
           envFrom:
           - secretRef:
-              name: {{ . }}
+              name: {{ .secretName }}
+          {{- with .resources }}
+          resources:
+          {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- end }}
       {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
