@@ -24,6 +24,7 @@ spec:
         cluster-name: {{ include "patroni-postgres.fullname" . }}
         {{- include "patroni-postgres.selectorLabels" . | nindent 8 }}
     spec:
+      enableServiceLinks: false
       serviceAccountName: {{ include "patroni-postgres.serviceAccountName" . }}
       securityContext:
         fsGroup: 15432
