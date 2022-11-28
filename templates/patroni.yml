@@ -106,6 +106,8 @@ spec:
           volumeMounts:
           - mountPath: /var/lib/postgresql
             name: pgdata
+          securityContext:
+            allowPrivilegeEscalation: false
       {{- with .Values.postgres_exporter }}
         {{- if .secretName }}
         - name: exporter
