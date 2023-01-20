@@ -45,15 +45,9 @@ spec:
             protocol: TCP
           - containerPort: 5432
             protocol: TCP
-          startupProbe:
-            failureThreshold: 20
-            httpGet:
-              path: /health
-              port: 8008
-              scheme: HTTP
           livenessProbe:
             httpGet:
-              path: /health
+              path: /liveness
               port: 8008
               scheme: HTTP
           readinessProbe:
