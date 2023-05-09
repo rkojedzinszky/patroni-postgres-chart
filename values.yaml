@@ -11,8 +11,11 @@ pvcStorageClasses:
 
 pvcSize: 1Gi
 
-image: ghcr.io/rkojedzinszky/postgres-patroni:13-2.1.1
+image: ghcr.io/rkojedzinszky/postgres-patroni:20230509
 imagePullPolicy: IfNotPresent
+
+# Desired PostgreSQL major version
+pgVersion: 13
 
 resources:
   requests:

@@ -56,6 +56,8 @@ spec:
               port: 8008
               scheme: HTTP
           env:
+          - name: PG_VERSION
+            value: "{{ .Values.pgVersion }}"
           - name: PATRONI_KUBERNETES_POD_IP
             valueFrom:
               fieldRef:
