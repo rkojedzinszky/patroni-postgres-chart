@@ -31,6 +31,9 @@ podAntiAffinityTopologyKey: ""
 # set desired serviceName here. if unset, the release name will be used
 serviceName: ""
 
+# service type
+serviceType: ClusterIP
+
 # generate a PodDisruptionBudget according to parameters
 # https://kubernetes.io/docs/tasks/run-application/configure-pdb/
 #poddisruptionbudget:
