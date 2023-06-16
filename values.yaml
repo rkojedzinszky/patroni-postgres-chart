@@ -22,6 +22,10 @@ resources:
     cpu: 100m
     memory: 96Mi
 
+# Minimum number of seconds for which a newly created pod should be ready without any of its container crashing for it to be considered available.
+# https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#statefulsetspec-v1-apps
+minReadySeconds: 60
+
 nodeSelector: {}
 
 tolerations: []
