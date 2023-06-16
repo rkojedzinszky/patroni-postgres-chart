@@ -14,8 +14,8 @@ pvcSize: 1Gi
 image: ghcr.io/rkojedzinszky/postgres-patroni:20230509
 imagePullPolicy: IfNotPresent
 
-# Desired PostgreSQL major version
-pgVersion: 13
+# Desired PostgreSQL major version (11|13|15)
+pgVersion:
 
 resources:
   requests:
