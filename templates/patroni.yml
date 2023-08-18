@@ -6,7 +6,7 @@ metadata:
     {{- include "patroni-postgres.labels" . | nindent 4 }}
 spec:
   minReadySeconds: {{ .Values.minReadySeconds }}
-  serviceName: {{ include "patroni-postgres.fullname" . }}
+  serviceName: {{ include "patroni-postgres.serviceName" . }}
   replicas: {{ len .Values.pvcStorageClasses }}
   selector:
     matchLabels:
