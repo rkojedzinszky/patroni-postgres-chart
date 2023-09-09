@@ -112,6 +112,18 @@ for sc in $storageClasses ; do
 	pp="$(echo "$pp" | jq -c --arg sc $sc '.spec.volumes += [{"storageClassName":$sc}]')"
 done
 
+# parse annotations
+annotations="$(echo "$sts" | jq -c '.spec.template.metadata.annotations')"
+if [ "$annotations" != "null" ]; then
+	pp="$(echo "$pp" | jq -c ".spec += {\"annotations\":$annotations}")"
+fi
+
+# parse container[0] resources
+resources="$(echo "$sts" | jq -c '.spec.template.spec.containers[0].resources')"
+if [ "$resources" != "null" ]; then
+	pp="$(echo "$pp" | jq -c ".spec += {\"resources\":$resources}")"
+fi
+
 # Parse podAntiAffinityTopologyKey
 podAntiAffinityTopologyKey="$(echo "$sts" | jq -r '.spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[0].topologyKey')"
 if [ "$podAntiAffinityTopologyKey" = "null" ]; then
