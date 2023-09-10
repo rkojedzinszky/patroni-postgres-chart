@@ -34,6 +34,10 @@ if [ $? -ne 0 ]; then
 	help
 fi
 
+tmpdir=$(mktemp -d)
+trap "rm -rf $tmpdir" EXIT
+stsfile="$tmpdir/statefulset.json"
+
 eval set -- "$options"
 
 if ! type kubectl jq > /dev/null 2>&1 ; then
@@ -64,7 +68,7 @@ fi
 log "[=] Looking up StatefulSet"
 instance="$1"
 helmSelectors="app.kubernetes.io/instance=$instance,app.kubernetes.io/managed-by=Helm,app.kubernetes.io/name=patroni-postgres"
-stsName=$(kubectl $nsopt get sts -l "$helmSelectors" --template '{{range .items}}{{.metadata.name}} {{end}}')
+stsName=$(kubectl $nsopt get sts -l "$helmSelectors" --template '{{range .items}}{{.metadata.name}} {{end}}' | xargs)
 case $(echo "$stsName" | wc -w) in
 	0)
 		log "[-] StatefulSet not found"
@@ -84,10 +88,17 @@ operatorLabels="app.kubernetes.io/instance=$stsName app.kubernetes.io/managed-by
 pp="$(echo '{}' | jq -c --arg stsName $stsName '. + {"apiVersion":"kwebs.cloud/v1alpha1","kind":"PatroniPostgres","metadata":{"name":$stsName},"spec":{"volumes":[]}}')"
 
 # read statefulset
-sts="$(kubectl $nsopt get sts $stsName -o json)"
+kubectl $nsopt get sts $stsName -o json > "$stsfile"
+
+jqsts()
+{
+	local filter="$1"
+
+	jq -c -r "$filter" "$stsfile"
+}
 
 # parse pgversion
-pgVersion="$(echo "$sts" | jq -r '.spec.template.spec.containers[0].env[] | select(.name == "PG_VERSION") | .value')"
+pgVersion="$(jqsts '.spec.template.spec.containers[0].env[] | select(.name == "PG_VERSION") | .value')"
 echo "# Detected pgversion is $pgVersion"
 pp="$(echo "$pp" | jq -c ".spec.version = $pgVersion")"
 
@@ -113,40 +124,49 @@ for sc in $storageClasses ; do
 done
 
 # parse annotations
-annotations="$(echo "$sts" | jq -c '.spec.template.metadata.annotations')"
+annotations="$(jqsts '.spec.template.metadata.annotations')"
 if [ "$annotations" != "null" ]; then
 	pp="$(echo "$pp" | jq -c ".spec += {\"annotations\":$annotations}")"
 fi
 
 # parse container[0] resources
-resources="$(echo "$sts" | jq -c '.spec.template.spec.containers[0].resources')"
+resources="$(jqsts '.spec.template.spec.containers[0].resources')"
 if [ "$resources" != "null" ]; then
 	pp="$(echo "$pp" | jq -c ".spec += {\"resources\":$resources}")"
 fi
 
 # Parse podAntiAffinityTopologyKey
-podAntiAffinityTopologyKey="$(echo "$sts" | jq -r '.spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[0].topologyKey')"
+podAntiAffinityTopologyKey="$(jqsts '.spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[0].topologyKey')"
 if [ "$podAntiAffinityTopologyKey" = "null" ]; then
 	podAntiAffinityTopologyKey=""
 fi
 pp="$(echo "$pp" | jq -c --arg podAntiAffinityTopologyKey "$podAntiAffinityTopologyKey" '.spec += {"podAntiAffinityTopologyKey":$podAntiAffinityTopologyKey}')"
 
 # parse nodeSelector
-nodeSelector="$(echo "$sts" | jq '.spec.template.spec.nodeSelector')"
+nodeSelector="$(jqsts '.spec.template.spec.nodeSelector')"
 if [ "$nodeSelector" != "null" ]; then
 	pp="$(echo "$pp" | jq -c ".spec += {\"nodeSelector\":$nodeSelector}")"
 fi
 
 # parse tolerations
-tolerations="$(echo "$sts" | jq '.spec.template.spec.tolerations')"
+tolerations="$(jqsts '.spec.template.spec.tolerations')"
 if [ "$tolerations" != "null" ]; then
 	pp="$(echo "$pp" | jq -c ".spec += {\"tolerations\":$tolerations}")"
 fi
 
 # parse extracontainer
-extracontainer="$(echo "$sts" | jq -c ".spec.template.spec.containers[1]")"
+extracontainer="$(jqsts '.spec.template.spec.containers[1]')"
 if [ "$extracontainer" != "null" ]; then
 	pp="$(echo "$pp" | jq -c ".spec += {\"extraContainers\":[$extracontainer]}")"
+fi
+
+# parse servicetype
+serviceName=$(kubectl get service -l $helmSelectors --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}' | sed -n -r -e '/-headless$/{ s/-headless$//; p }' | head -1)
+if [ -n "$serviceName" ]; then
+	serviceType=$(kubectl $nsopt get service $serviceName --template '{{.spec.type}}')
+	if [ -n "$serviceType" ]; then
+		pp="$(echo "$pp" | jq -c --arg serviceType $serviceType '.spec += {"serviceType":$serviceType}')"
+	fi
 fi
 
 # services not being owned, and to be patched
@@ -168,16 +188,6 @@ echo "# This will delete existing StatefulSet"
 echo " kubectl $nsopt delete sts $stsName"
 echo ""
 
-echo "# This will create PatroniPostgres instance"
-echo " echo '$pp' | kubectl $nsopt apply -f -"
-echo ""
-
-#    app.kubernetes.io/instance: pp-patroni-postgres
-#    app.kubernetes.io/managed-by: kwebs-patroni-postgres-operator
-#    app.kubernetes.io/name: patroni-postgres
-#    cluster-name: pp-patroni-postgres
-#    role: master
-
 if [ -n "$orphanServices" ]; then
 	echo "# The following services will be patched to work, howewer, they will be orphaned,"
 	echo "# and you should migrate away from using them."
@@ -191,3 +201,7 @@ if [ -n "$orphanServices" ]; then
 
 	echo ""
 fi
+
+echo "# This will finally create PatroniPostgres instance"
+echo " echo '$pp' | kubectl $nsopt apply -f -"
+echo ""
