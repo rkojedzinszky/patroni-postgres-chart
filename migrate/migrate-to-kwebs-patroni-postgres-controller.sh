@@ -64,7 +64,7 @@ fi
 log "[=] Looking up StatefulSet"
 instance="$1"
 helmSelectors="app.kubernetes.io/instance=$instance,app.kubernetes.io/managed-by=Helm,app.kubernetes.io/name=patroni-postgres"
-stsName="$(kubectl $nsopt get sts -l "$helmSelectors" --template '{{range .items}}{{.metadata.name}} {{end}}')"
+stsName=$(kubectl $nsopt get sts -l "$helmSelectors" --template '{{range .items}}{{.metadata.name}} {{end}}')
 case $(echo "$stsName" | wc -w) in
 	0)
 		log "[-] StatefulSet not found"
@@ -92,14 +92,14 @@ echo "# Detected pgversion is $pgVersion"
 pp="$(echo "$pp" | jq -c ".spec.version = $pgVersion")"
 
 # read pvcNames
-pvcNames="$(kubectl $nsopt get pvc -l "$helmSelectors" --template '{{range .items}}{{.metadata.name}} {{end}}')"
+pvcNames=$(kubectl $nsopt get pvc -l "$helmSelectors" --template '{{range .items}}{{.metadata.name}} {{end}}')
 if [ $(echo $pvcNames | wc -w) -eq 0 ]; then
 	log "[-] No PVCs found for deployment"
 	exit 5
 fi
 
 # Collect pvcSize and storageclasses
-storageClasses="$(kubectl $nsopt get pvc -l "$helmSelectors" --template '{{range .items}}{{.metadata.name}} {{.spec.storageClassName}}{{"\n"}}{{end}}' | sort -n | awk '{print $2}')"
+storageClasses=$(kubectl $nsopt get pvc -l "$helmSelectors" --template '{{range .items}}{{.metadata.name}} {{.spec.storageClassName}}{{"\n"}}{{end}}' | sort -n | awk '{print $2}')
 pvcSizes="$(kubectl $nsopt get pvc -l "$helmSelectors" --template '{{range .items}}{{.spec.resources.requests.storage}}{{"\n"}}{{end}}')"
 if [ $(echo "$pvcSizes" | sort | uniq | wc -w) -ne 1 ]; then
 	log "[-] Invalid pvc sizes found: $pvcSizes"
@@ -149,18 +149,45 @@ if [ "$extracontainer" != "null" ]; then
 	pp="$(echo "$pp" | jq -c ".spec += {\"extraContainers\":[$extracontainer]}")"
 fi
 
+# services not being owned, and to be patched
+orphanServices=$(kubectl $nsopt get service -l $helmSelectors --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}' | grep -vE "^$stsName(-headless)?$")
+
 ####
 ####
 ####
 
 echo "# This will remove helm secrets"
 echo " kubectl $nsopt delete secret -l name=$instance,owner=helm"
+echo ""
 
 echo "# This will relabel PVCs"
 echo " kubectl $nsopt label --overwrite pvc $pvcNames $operatorLabels"
+echo ""
 
 echo "# This will delete existing StatefulSet"
 echo " kubectl $nsopt delete sts $stsName"
+echo ""
 
 echo "# This will create PatroniPostgres instance"
 echo " echo '$pp' | kubectl $nsopt apply -f -"
+echo ""
+
+#    app.kubernetes.io/instance: pp-patroni-postgres
+#    app.kubernetes.io/managed-by: kwebs-patroni-postgres-operator
+#    app.kubernetes.io/name: patroni-postgres
+#    cluster-name: pp-patroni-postgres
+#    role: master
+
+if [ -n "$orphanServices" ]; then
+	echo "# The following services will be patched to work, howewer, they will be orphaned,"
+	echo "# and you should migrate away from using them."
+	echo $orphanServices | sed -e 's/^/# /'
+
+	spatch="$(echo '[]' | jq -c --arg instance $stsName '. + [{"op":"replace","path":"/spec/selector","value":{"app.kubernetes.io/instance":$instance,"app.kubernetes.io/managed-by":"kwebs-patroni-postgres-operator","app.kubernetes.io/name":"patroni-postgres","cluster-name":$instance,"role":"master"}}]')"
+
+	for s in $orphanServices; do
+		echo " kubectl $nsopt patch --type=json service $s --patch '$spatch'"
+	done
+
+	echo ""
+fi
