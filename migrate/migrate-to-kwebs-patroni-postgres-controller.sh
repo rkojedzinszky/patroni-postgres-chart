@@ -37,6 +37,7 @@ fi
 tmpdir=$(mktemp -d)
 trap "rm -rf $tmpdir" EXIT
 stsfile="$tmpdir/statefulset.json"
+pvcs="$tmpdir/pvcs.txt"
 
 eval set -- "$options"
 
@@ -110,18 +111,23 @@ if [ $(echo $pvcNames | wc -w) -eq 0 ]; then
 fi
 
 # Collect pvcSize and storageclasses
-storageClasses=$(kubectl $nsopt get pvc -l "$helmSelectors" --template '{{range .items}}{{.metadata.name}} {{.spec.storageClassName}}{{"\n"}}{{end}}' | sort -n | awk '{print $2}')
 pvcSizes="$(kubectl $nsopt get pvc -l "$helmSelectors" --template '{{range .items}}{{.spec.resources.requests.storage}}{{"\n"}}{{end}}')"
 if [ $(echo "$pvcSizes" | sort | uniq | wc -w) -ne 1 ]; then
 	log "[-] Invalid pvc sizes found: $pvcSizes"
 	exit 6
 fi
 pvcSize=$(echo "$pvcSizes" | head -1)
-
 pp="$(echo "$pp" | jq -c --arg pvcSize $pvcSize '.spec += {"volumeSize":$pvcSize,"volumes":[]}')"
-for sc in $storageClasses ; do
-	pp="$(echo "$pp" | jq -c --arg sc $sc '.spec.volumes += [{"storageClassName":$sc}]')"
-done
+
+# Collect storageclasses
+kubectl $nsopt get pvc -l "$helmSelectors" --template '{{range .items}}{{.metadata.name}} {{.spec.storageClassName}} {{index .spec.accessModes 0}}{{"\n"}}{{end}}' | sort -n > "$pvcs"
+while read name class mode ; do
+	vol="{\"storageClassName\":\"$class\"}"
+	if [ "$mode" != "ReadWriteOnce" ]; then
+		vol=$(echo "$vol" | jq -c --arg mode $mode '. + {"accessMode":$mode}')
+	fi
+	pp="$(echo "$pp" | jq -c ".spec.volumes += [$vol]")"
+done < "$pvcs"
 
 # parse annotations
 annotations="$(jqsts '.spec.template.metadata.annotations')"
