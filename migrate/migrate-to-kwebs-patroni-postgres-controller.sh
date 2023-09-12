@@ -68,7 +68,7 @@ fi
 log "[=] Looking up StatefulSet"
 instance="$1"
 helmSelectors="app.kubernetes.io/instance=$instance,app.kubernetes.io/managed-by=Helm,app.kubernetes.io/name=patroni-postgres"
-stsName=$(kubectl $nsopt get sts -l "$helmSelectors" --template '{{range .items}}{{.metadata.name}} {{end}}' | xargs)
+stsName=$(kubectl $nsopt get sts -l "$helmSelectors" --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}')
 case $(echo "$stsName" | wc -w) in
 	0)
 		log "[-] StatefulSet not found"
