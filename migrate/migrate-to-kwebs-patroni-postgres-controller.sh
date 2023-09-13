@@ -86,7 +86,7 @@ case $(echo "$stsName" | wc -w) in
 esac
 operatorLabels="app.kubernetes.io/instance=$stsName app.kubernetes.io/managed-by=kwebs-patroni-postgres-operator"
 
-pp="$(echo '{}' | jq -c --arg stsName $stsName '. + {"apiVersion":"kwebs.cloud/v1alpha1","kind":"PatroniPostgres","metadata":{"name":$stsName},"spec":{"volumes":[]}}')"
+pp="$(echo '{}' | jq -c --arg stsName $stsName '. + {"apiVersion":"kwebs.cloud/v1alpha1","kind":"PatroniPostgres","metadata":{"name":$stsName},"spec":{}}')"
 
 # read statefulset
 kubectl $nsopt get sts $stsName -o json > "$stsfile"
@@ -117,16 +117,16 @@ if [ $(echo "$pvcSizes" | sort | uniq | wc -w) -ne 1 ]; then
 	exit 6
 fi
 pvcSize=$(echo "$pvcSizes" | head -1)
-pp="$(echo "$pp" | jq -c --arg pvcSize $pvcSize '.spec += {"volumeSize":$pvcSize,"volumes":[]}')"
+pp="$(echo "$pp" | jq -c --arg pvcSize $pvcSize '.spec += {"volumeSize":$pvcSize,"nodes":[]}')"
 
 # Collect storageclasses
 kubectl $nsopt get pvc -l "$helmSelectors" --template '{{range .items}}{{.metadata.name}} {{.spec.storageClassName}} {{index .spec.accessModes 0}}{{"\n"}}{{end}}' | sort -n > "$pvcs"
 while read name class mode ; do
-	vol="{\"storageClassName\":\"$class\"}"
+	node="{\"storageClassName\":\"$class\"}"
 	if [ "$mode" != "ReadWriteOnce" ]; then
-		vol=$(echo "$vol" | jq -c --arg mode $mode '. + {"accessMode":$mode}')
+		node=$(echo "$node" | jq -c --arg mode $mode '. + {"accessMode":$mode}')
 	fi
-	pp="$(echo "$pp" | jq -c ".spec.volumes += [$vol]")"
+	pp="$(echo "$pp" | jq -c ".spec.nodes += [$node]")"
 done < "$pvcs"
 
 # parse annotations
