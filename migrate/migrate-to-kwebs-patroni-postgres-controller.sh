@@ -194,6 +194,10 @@ echo "# This will delete existing StatefulSet"
 echo " kubectl $nsopt delete sts $stsName"
 echo ""
 
+echo "# This will remove networkpolicies"
+echo " kubectl $nsopt delete networkpolicies.networking.k8s.io -l $helmSelectors"
+echo ""
+
 if [ -n "$orphanServices" ]; then
 	echo "# The following services will be patched to work, howewer, they will be orphaned,"
 	echo "# and you should migrate away from using them."
