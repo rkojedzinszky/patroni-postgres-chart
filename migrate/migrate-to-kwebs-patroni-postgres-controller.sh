@@ -76,7 +76,7 @@ case $(echo "$stsName" | wc -w) in
 		exit 3
 		;;
 	1)
-		log "[+] StatefulSet found with name $stsName"
+		log "[+] StatefulSet found with name $stsName, this will be the name for PatroniPostgres instance"
 		break
 		;;
 	*)
@@ -212,6 +212,6 @@ if [ -n "$orphanServices" ]; then
 	echo ""
 fi
 
-echo "# This will finally create PatroniPostgres instance"
+echo "# This will finally create PatroniPostgres instance $stsName"
 echo " echo '$pp' | kubectl $nsopt apply -f -"
 echo ""
