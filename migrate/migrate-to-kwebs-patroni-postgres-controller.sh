@@ -167,7 +167,7 @@ if [ "$extracontainer" != "null" ]; then
 fi
 
 # parse servicetype
-serviceName=$(kubectl get service -l $helmSelectors --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}' | sed -n -r -e '/-headless$/{ s/-headless$//; p }' | head -1)
+serviceName=$(kubectl $nsopt get service -l $helmSelectors --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}' | sed -n -r -e '/-headless$/{ s/-headless$//; p }' | head -1)
 if [ -n "$serviceName" ]; then
 	serviceType=$(kubectl $nsopt get service $serviceName --template '{{.spec.type}}')
 	if [ -n "$serviceType" ]; then
